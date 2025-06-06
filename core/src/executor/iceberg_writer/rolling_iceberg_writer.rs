@@ -29,11 +29,11 @@ pub struct RollingIcebergWriter<B, D> {
     /// The current active writer.
     inner_writer: D,
     /// Target file size in bytes. When exceeded, a new file is started.
-    target_file_size: usize,
+    target_file_size: u64,
     /// Collected data files that have been closed.
     data_files: Vec<DataFile>,
     /// Current written size of the active file.
-    current_written_size: usize,
+    current_written_size: u64,
 }
 
 #[async_trait::async_trait]
@@ -47,7 +47,11 @@ where
     async fn write(&mut self, input: RecordBatch) -> Result<()> {
         let input_size = input.get_array_memory_size();
         // If adding this batch would exceed the target file size, close current file and start a new one.
-        if need_build_new_file(self.current_written_size, input_size, self.target_file_size) {
+        if need_build_new_file(
+            self.current_written_size,
+            input_size as u64,
+            self.target_file_size,
+        ) {
             let data_files = self.inner_writer.close().await?;
             self.data_files.extend(data_files);
             self.inner_writer = self.inner_writer_builder.clone().build().await?;
@@ -55,7 +59,7 @@ where
         }
         // Write the batch to the current writer.
         self.inner_writer.write(input).await?;
-        self.current_written_size += input_size;
+        self.current_written_size += input_size as u64;
         Ok(())
     }
 
@@ -68,12 +72,12 @@ where
 }
 
 pub fn need_build_new_file(
-    current_written_size: usize,
-    input_size: usize,
-    target_file_size: usize,
+    current_written_size: u64,
+    input_size: u64,
+    target_file_size: u64,
 ) -> bool {
     // If the current file size is less than 10% of the target size, don't build a new file.
-    if current_written_size < target_file_size * 1 / 10 {
+    if current_written_size < target_file_size / 10 {
         return false;
     }
     // If the total size of the current file and the new batch would exceed 1.5x the target size, build a new file.
@@ -93,12 +97,12 @@ pub fn need_build_new_file(
 /// Builder for RollingIcebergWriter.
 pub struct RollingIcebergWriterBuilder<B> {
     inner_builder: B,
-    target_file_size: usize,
+    target_file_size: u64,
 }
 
 impl<B> RollingIcebergWriterBuilder<B> {
     /// Create a new RollingIcebergWriterBuilder.
-    pub fn new(inner_builder: B, target_file_size: usize) -> Self {
+    pub fn new(inner_builder: B, target_file_size: u64) -> Self {
         Self {
             inner_builder,
             target_file_size,

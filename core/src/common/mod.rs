@@ -72,12 +72,13 @@ impl Metrics {
             &["catalog_name", "table_ident"],
         );
 
+        // 10ms 100ms 1s 10s 100s
         let compaction_commit_duration = registry.register_histogram_vec_with_buckets(
             "compaction_commit_duration".into(),
             "BergLoom compaction commit duration in milliseconds".into(),
             &["catalog_name", "table_ident"],
             Buckets::exponential(
-                1.0, 2.0, 20, // Start at 1 millisecond, double each bucket, up to 20 buckets
+                10.0, 10.0, 5, // Start at 10ms, multiply each bucket by 10, up to 5 buckets
             ),
         );
 

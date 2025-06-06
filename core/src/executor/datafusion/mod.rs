@@ -15,10 +15,7 @@
  */
 
 use crate::{error::Result, executor::iceberg_writer::rolling_iceberg_writer};
-use ::datafusion::{
-    parquet::file::properties::WriterProperties,
-    prelude::{SessionConfig, SessionContext},
-};
+use ::datafusion::parquet::file::properties::WriterProperties;
 use async_trait::async_trait;
 use datafusion_processor::{DataFusionTaskContext, DatafusionProcessor};
 use futures::{StreamExt, future::try_join_all};
@@ -41,7 +38,7 @@ use tokio::task::JoinHandle;
 
 use crate::CompactionError;
 
-use super::{CompactionExecutor, InputFileScanTasks, RewriteFilesStat};
+use super::{CompactionExecutor, RewriteFilesStat};
 pub mod datafusion_processor;
 use super::{RewriteFilesRequest, RewriteFilesResponse};
 pub mod file_scan_task_table_provider;
@@ -61,41 +58,24 @@ impl CompactionExecutor for DataFusionExecutor {
             dir_path,
             partition_spec,
         } = request;
-        let mut session_config = SessionConfig::new();
-        session_config = session_config.with_target_partitions(config.target_partitions);
-        let ctx = Arc::new(SessionContext::new_with_config(session_config));
 
         let mut stat = RewriteFilesStat::default();
         let rewritten_files_count = input_file_scan_tasks.input_files_count();
 
-        let InputFileScanTasks {
-            data_files,
-            position_delete_files,
-            equality_delete_files,
-        } = input_file_scan_tasks;
-
         let datafusion_task_ctx = DataFusionTaskContext::builder()?
             .with_schema(schema)
-            .with_datafile(data_files)
-            .with_position_delete_files(position_delete_files)
-            .with_equality_delete_files(equality_delete_files)
+            .with_input_data_files(input_file_scan_tasks)
             .build_merge_on_read()?;
-        let (batchs, input_schema) = DatafusionProcessor::new(
-            ctx,
-            datafusion_task_ctx,
-            config.batch_parallelism,
-            config.target_partitions,
-            file_io.clone(),
-        )
-        .execute()
-        .await?;
+        let (batches, input_schema) = DatafusionProcessor::new(config.clone(), file_io.clone())
+            .execute(datafusion_task_ctx)
+            .await?;
         let arc_input_schema = Arc::new(input_schema);
         let mut futures = Vec::with_capacity(config.batch_parallelism);
         // build iceberg writer for each partition
-        for mut batch in batchs {
+        for mut batch in batches {
             let dir_path = dir_path.clone();
             let schema = arc_input_schema.clone();
-            let data_file_prefix = (&config.data_file_prefix).clone();
+            let data_file_prefix = config.data_file_prefix.clone();
             let target_file_size = config.target_file_size;
             let file_io = file_io.clone();
             let partition_spec = partition_spec.clone();
@@ -149,7 +129,7 @@ impl DataFusionExecutor {
         schema: Arc<Schema>,
         file_io: FileIO,
         partition_spec: Arc<PartitionSpec>,
-        target_file_size: usize,
+        target_file_size: u64,
     ) -> Result<Box<dyn IcebergWriter>> {
         let location_generator = DefaultLocationGenerator { dir_path };
         let unique_uuid_suffix = Uuid::now_v7();
