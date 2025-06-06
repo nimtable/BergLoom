@@ -73,7 +73,7 @@ pub fn need_build_new_file(
     target_file_size: usize,
 ) -> bool {
     // If the current file size is less than 10% of the target size, don't build a new file.
-    if current_written_size < target_file_size * 1 / 10 {
+    if current_written_size < target_file_size / 10 {
         return false;
     }
     // If the total size of the current file and the new batch would exceed 1.5x the target size, build a new file.

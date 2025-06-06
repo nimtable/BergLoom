@@ -49,6 +49,7 @@ pub struct DatafusionProcessor {
     batch_parallelism: usize,
     target_partitions: usize,
     ctx: Arc<SessionContext>,
+    read_file_parallelism: usize,
 }
 
 impl DatafusionProcessor {
@@ -58,6 +59,7 @@ impl DatafusionProcessor {
         batch_parallelism: usize,
         target_partitions: usize,
         file_io: FileIO,
+        read_file_parallelism: usize,
     ) -> Self {
         let table_register = DatafusionTableRegister::new(file_io, ctx.clone());
         Self {
@@ -66,6 +68,7 @@ impl DatafusionProcessor {
             batch_parallelism,
             target_partitions,
             ctx,
+            read_file_parallelism,
         }
     }
 
@@ -78,6 +81,7 @@ impl DatafusionProcessor {
                 self.datafusion_task_ctx.need_seq_num(),
                 self.datafusion_task_ctx.need_file_path_and_pos(),
                 self.batch_parallelism,
+                self.read_file_parallelism,
             )?;
         }
 
@@ -91,6 +95,7 @@ impl DatafusionProcessor {
                     .unwrap(),
                 POSITION_DELETE_TABLE,
                 self.batch_parallelism,
+                self.read_file_parallelism,
             )?;
         }
 
@@ -108,6 +113,7 @@ impl DatafusionProcessor {
                     file_scan_tasks,
                     &equality_delete_table_name,
                     self.batch_parallelism,
+                    self.read_file_parallelism,
                 )?;
             }
         }
@@ -146,6 +152,7 @@ impl DatafusionTableRegister {
         DatafusionTableRegister { file_io, ctx }
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn register_data_table_provider(
         &self,
         schema: &Schema,
@@ -154,6 +161,7 @@ impl DatafusionTableRegister {
         need_seq_num: bool,
         need_file_path_and_pos: bool,
         batch_parallelism: usize,
+        read_file_parallelism: usize,
     ) -> Result<()> {
         self.register_table_provider_impl(
             schema,
@@ -162,6 +170,7 @@ impl DatafusionTableRegister {
             need_seq_num,
             need_file_path_and_pos,
             batch_parallelism,
+            read_file_parallelism,
         )
     }
 
@@ -171,6 +180,7 @@ impl DatafusionTableRegister {
         file_scan_tasks: Vec<FileScanTask>,
         table_name: &str,
         batch_parallelism: usize,
+        read_file_parallelism: usize,
     ) -> Result<()> {
         self.register_table_provider_impl(
             schema,
@@ -179,6 +189,7 @@ impl DatafusionTableRegister {
             false,
             false,
             batch_parallelism,
+            read_file_parallelism,
         )
     }
 
@@ -191,6 +202,7 @@ impl DatafusionTableRegister {
         need_seq_num: bool,
         need_file_path_and_pos: bool,
         batch_parallelism: usize,
+        read_file_parallelism: usize,
     ) -> Result<()> {
         let schema = schema_to_arrow_schema(schema)?;
         let data_file_table_provider = IcebergFileScanTaskTableProvider::new(
@@ -200,6 +212,7 @@ impl DatafusionTableRegister {
             need_seq_num,
             need_file_path_and_pos,
             batch_parallelism,
+            read_file_parallelism,
         );
 
         self.ctx

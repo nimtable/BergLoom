@@ -86,6 +86,7 @@ impl CompactionExecutor for DataFusionExecutor {
             config.batch_parallelism,
             config.target_partitions,
             file_io.clone(),
+            4,
         )
         .execute()
         .await?;
@@ -95,7 +96,7 @@ impl CompactionExecutor for DataFusionExecutor {
         for mut batch in batchs {
             let dir_path = dir_path.clone();
             let schema = arc_input_schema.clone();
-            let data_file_prefix = (&config.data_file_prefix).clone();
+            let data_file_prefix = config.data_file_prefix.clone();
             let target_file_size = config.target_file_size;
             let file_io = file_io.clone();
             let partition_spec = partition_spec.clone();
