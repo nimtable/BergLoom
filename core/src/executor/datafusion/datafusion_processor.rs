@@ -43,10 +43,6 @@ pub const SYS_HIDDEN_FILE_PATH: &str = "sys_hidden_file_path";
 pub const SYS_HIDDEN_POS: &str = "sys_hidden_pos";
 const SYS_HIDDEN_COLS: [&str; 3] = [SYS_HIDDEN_SEQ_NUM, SYS_HIDDEN_FILE_PATH, SYS_HIDDEN_POS];
 
-const DATA_FILE_TABLE: &str = "data_file_table";
-const POSITION_DELETE_TABLE: &str = "position_delete_table";
-const EQUALITY_DELETE_TABLE: &str = "equality_delete_table";
-
 pub struct DatafusionProcessor {
     table_register: DatafusionTableRegister,
     ctx: Arc<SessionContext>,
@@ -79,7 +75,7 @@ impl DatafusionProcessor {
                 datafusion_task_ctx.data_files.take().ok_or_else(|| {
                     CompactionError::Unexpected("Data files are not set".to_owned())
                 })?,
-                &format!("{}_{}", datafusion_task_ctx.table_prefix, DATA_FILE_TABLE),
+                &datafusion_task_ctx.data_file_table_name(),
                 datafusion_task_ctx.need_seq_num(),
                 datafusion_task_ctx.need_file_path_and_pos(),
             )?;
@@ -94,10 +90,7 @@ impl DatafusionProcessor {
                     .ok_or_else(|| {
                         CompactionError::Unexpected("Position delete files are not set".to_owned())
                     })?,
-                &format!(
-                    "{}_{}",
-                    datafusion_task_ctx.table_prefix, POSITION_DELETE_TABLE
-                ),
+                &datafusion_task_ctx.position_delete_table_name(),
             )?;
         }
 
@@ -113,10 +106,7 @@ impl DatafusionProcessor {
                 self.table_register.register_delete_table_provider(
                     &equality_delete_schema,
                     file_scan_tasks,
-                    &format!(
-                        "{}_{}",
-                        datafusion_task_ctx.table_prefix, equality_delete_table_name
-                    ),
+                    &equality_delete_table_name,
                 )?;
             }
         }
@@ -401,15 +391,14 @@ impl DataFusionTaskContextBuilder {
     }
 
     // build data fusion task context
-    pub fn build_merge_on_read(self) -> Result<DataFusionTaskContext> {
+    pub fn build(self) -> Result<DataFusionTaskContext> {
         let mut highest_field_id = self.schema.highest_field_id();
         // Build schema for position delete file, file_path + pos
         let position_delete_schema = Self::build_position_schema()?;
         // Build schema for equality delete file, equality_ids + seq_num
         let mut equality_ids: Option<Vec<i32>> = None;
         let mut equality_delete_metadatas = Vec::new();
-        let mut table_idx = 0;
-        for task in &self.equality_delete_files {
+        for (table_idx, task) in self.equality_delete_files.iter().enumerate() {
             if equality_ids
                 .as_ref()
                 .is_none_or(|ids| !ids.eq(&task.equality_ids))
@@ -417,13 +406,13 @@ impl DataFusionTaskContextBuilder {
                 // If ids are different or not assigned, create a new metadata
                 let equality_delete_schema =
                     self.build_equality_delete_schema(&task.equality_ids, &mut highest_field_id)?;
-                let equality_delete_table_name = format!("{}_{}", EQUALITY_DELETE_TABLE, table_idx);
+                let equality_delete_table_name =
+                    table_name::build_equality_delete_table_name(&self.table_prefix, table_idx);
                 equality_delete_metadatas.push(EqualityDeleteMetadata::new(
                     equality_delete_schema,
                     equality_delete_table_name,
                 ));
                 equality_ids = Some(task.equality_ids.clone());
-                table_idx += 1;
             }
 
             // Add the file scan task to the last metadata
@@ -482,8 +471,10 @@ impl DataFusionTaskContextBuilder {
 
         let sql_builder = SqlBuilder::new(
             &project_names,
-            Some(format!("{}_{}", self.table_prefix, POSITION_DELETE_TABLE)),
-            Some(format!("{}_{}", self.table_prefix, DATA_FILE_TABLE)),
+            Some(table_name::build_position_delete_table_name(
+                &self.table_prefix,
+            )),
+            Some(table_name::build_data_file_table_name(&self.table_prefix)),
             &equality_delete_metadatas,
             need_file_path_and_pos,
         );
@@ -561,6 +552,18 @@ impl DataFusionTaskContext {
             .as_ref()
             .is_some_and(|v| !v.is_empty())
     }
+
+    pub fn data_file_table_name(&self) -> String {
+        table_name::build_data_file_table_name(&self.table_prefix)
+    }
+
+    pub fn position_delete_table_name(&self) -> String {
+        table_name::build_position_delete_table_name(&self.table_prefix)
+    }
+
+    pub fn equality_delete_table_name(&self, table_idx: usize) -> String {
+        table_name::build_equality_delete_table_name(&self.table_prefix, table_idx)
+    }
 }
 
 /// Metadata for equality delete files
@@ -595,8 +598,32 @@ impl EqualityDeleteMetadata {
     }
 }
 
+mod table_name {
+    pub const DATA_FILE_TABLE: &str = "data_file_table";
+    pub const POSITION_DELETE_TABLE: &str = "position_delete_table";
+    pub const EQUALITY_DELETE_TABLE: &str = "equality_delete_table";
+
+    pub fn build_data_file_table_name(table_prefix: &str) -> String {
+        format!("{}_{}", table_prefix, DATA_FILE_TABLE)
+    }
+
+    pub fn build_position_delete_table_name(table_prefix: &str) -> String {
+        format!("{}_{}", table_prefix, POSITION_DELETE_TABLE)
+    }
+
+    // Builds the equality delete table name with a prefix and index
+    // index is used to differentiate multiple equality delete tables (schema)
+    pub fn build_equality_delete_table_name(table_prefix: &str, table_idx: usize) -> String {
+        format!("{}_{}_{}", table_prefix, EQUALITY_DELETE_TABLE, table_idx)
+    }
+}
+
 #[cfg(test)]
 mod tests {
+    use crate::executor::datafusion::datafusion_processor::table_name::{
+        DATA_FILE_TABLE, POSITION_DELETE_TABLE,
+    };
+
     use super::*;
     use iceberg::spec::{NestedField, PrimitiveType, Schema, Type};
     use std::sync::Arc;

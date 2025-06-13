@@ -65,7 +65,7 @@ impl CompactionExecutor for DataFusionExecutor {
         let datafusion_task_ctx = DataFusionTaskContext::builder()?
             .with_schema(schema)
             .with_input_data_files(input_file_scan_tasks)
-            .build_merge_on_read()?;
+            .build()?;
         let (batches, input_schema) = DatafusionProcessor::new(config.clone(), file_io.clone())
             .execute(datafusion_task_ctx)
             .await?;
