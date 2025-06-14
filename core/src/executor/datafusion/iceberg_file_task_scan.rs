@@ -122,18 +122,42 @@ impl IcebergFileTaskScan {
         need_file_path_and_pos: bool,
         batch_parallelism: usize,
         max_record_batch_rows: usize,
-    ) -> Self {
+    ) -> Result<Self, DataFusionError> {
         let output_schema = match projection {
             None => schema.clone(),
             Some(projection) => Arc::new(schema.project(projection).unwrap()),
         };
-        let file_scan_tasks_group = split_n_vecs(file_scan_tasks, batch_parallelism);
+        let projection = get_column_names(schema.clone(), projection);
+        let file_scan_tasks_projection = if let Some(projection) = &projection {
+            file_scan_tasks
+                .into_iter()
+                .map(|mut task| {
+                    let project_field_ids = projection
+                        .iter()
+                        .filter_map(|name| task.schema().field_id_by_name(name))
+                        .collect::<Vec<_>>();
+                    let new_schema = iceberg::spec::Schema::builder()
+                        .with_fields(
+                            projection
+                                .iter()
+                                .filter_map(|name| task.schema().field_by_name(name).cloned()),
+                        )
+                        .build()
+                        .map_err(to_datafusion_error)?;
+                    task.schema = Arc::new(new_schema);
+                    task.project_field_ids = project_field_ids;
+                    Ok(task)
+                })
+                .collect::<Result<Vec<_>, DataFusionError>>()?
+        } else {
+            file_scan_tasks
+        };
+        let file_scan_tasks_group = split_n_vecs(file_scan_tasks_projection, batch_parallelism);
         let plan_properties =
             Self::compute_properties(output_schema.clone(), file_scan_tasks_group.len());
-        let projection = get_column_names(schema.clone(), projection);
         let predicates = convert_filters_to_predicate(filters);
 
-        Self {
+        Ok(Self {
             file_scan_tasks_group,
             plan_properties,
             projection,
@@ -142,7 +166,7 @@ impl IcebergFileTaskScan {
             need_seq_num,
             need_file_path_and_pos,
             max_record_batch_rows,
-        }
+        })
     }
 
     /// Computes [`PlanProperties`] used in query optimization.
