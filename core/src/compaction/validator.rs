@@ -27,10 +27,10 @@ use iceberg::table::Table;
 
 use crate::config::CompactionConfigBuilder;
 use crate::error::Result;
+use crate::executor::InputFileScanTasks;
 use crate::executor::datafusion::datafusion_processor::{
     DataFusionTaskContext, DatafusionProcessor,
 };
-use crate::executor::InputFileScanTasks;
 use crate::{CompactionConfig, CompactionError};
 
 pub struct CompactionValidator {

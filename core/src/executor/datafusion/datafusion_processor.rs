@@ -17,15 +17,15 @@
 use std::sync::Arc;
 
 use crate::{
+    CompactionConfig,
     error::{CompactionError, Result},
     executor::InputFileScanTasks,
-    CompactionConfig,
 };
 use datafusion::{
     execution::SendableRecordBatchStream,
     physical_plan::{
-        execute_stream_partitioned, repartition::RepartitionExec, ExecutionPlan,
-        ExecutionPlanProperties, Partitioning,
+        ExecutionPlan, ExecutionPlanProperties, Partitioning, execute_stream_partitioned,
+        repartition::RepartitionExec,
     },
     prelude::{SessionConfig, SessionContext},
 };

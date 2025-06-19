@@ -14,7 +14,11 @@ futures = { workspace = true }
 futures-async-stream = { workspace = true }
 iceberg = { workspace = true }
 iceberg-catalog-memory = { workspace = true }
+iceberg-catalog-rest = { workspace = true }
 iceberg-datafusion = { workspace = true }
+rand = { workspace = true }
+port_scanner = { workspace = true }
+ctor = { workspace = true }
 itertools = "0.13.0"
 mixtrics = "0.1.0"
 parquet = { workspace = true }
