@@ -19,14 +19,14 @@ use iceberg::{Catalog, ErrorKind, TableIdent};
 use mixtrics::metrics::BoxedRegistry;
 use mixtrics::registry::noop::NoopMetricsRegistry;
 
+use crate::CompactionError;
+use crate::Result;
 use crate::common::Metrics;
 use crate::compaction::validator::CompactionValidator;
 use crate::executor::{
-    create_compaction_executor, ExecutorType, InputFileScanTasks, RewriteFilesRequest,
-    RewriteFilesResponse, RewriteFilesStat,
+    ExecutorType, InputFileScanTasks, RewriteFilesRequest, RewriteFilesResponse, RewriteFilesStat,
+    create_compaction_executor,
 };
-use crate::CompactionError;
-use crate::Result;
 use crate::{CompactionConfig, CompactionExecutor};
 use futures_async_stream::for_await;
 use iceberg::scan::FileScanTask;
@@ -628,17 +628,17 @@ mod tests {
         EqualityDeleteFileWriterBuilder, EqualityDeleteWriterConfig,
     };
     use iceberg::writer::base_writer::sort_position_delete_writer::{
-        SortPositionDeleteWriterBuilder, POSITION_DELETE_SCHEMA,
+        POSITION_DELETE_SCHEMA, SortPositionDeleteWriterBuilder,
     };
+    use iceberg::writer::file_writer::ParquetWriterBuilder;
     use iceberg::writer::file_writer::location_generator::{
         DefaultFileNameGenerator, DefaultLocationGenerator,
     };
-    use iceberg::writer::file_writer::ParquetWriterBuilder;
     use iceberg::writer::function_writer::equality_delta_writer::{
-        EqualityDeltaWriterBuilder, DELETE_OP, INSERT_OP,
+        DELETE_OP, EqualityDeltaWriterBuilder, INSERT_OP,
     };
     use iceberg::writer::{
-        base_writer::data_file_writer::DataFileWriterBuilder, IcebergWriter, IcebergWriterBuilder,
+        IcebergWriter, IcebergWriterBuilder, base_writer::data_file_writer::DataFileWriterBuilder,
     };
     use iceberg::{Catalog, NamespaceIdent, TableCreation, TableIdent};
     use iceberg_catalog_memory::MemoryCatalog;

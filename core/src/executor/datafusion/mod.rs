@@ -18,18 +18,18 @@ use crate::{error::Result, executor::iceberg_writer::rolling_iceberg_writer};
 use ::datafusion::parquet::file::properties::WriterProperties;
 use async_trait::async_trait;
 use datafusion_processor::{DataFusionTaskContext, DatafusionProcessor};
-use futures::{future::try_join_all, StreamExt};
+use futures::{StreamExt, future::try_join_all};
 use iceberg::{
     io::FileIO,
     spec::{DataFile, PartitionSpec, Schema},
     writer::{
+        IcebergWriter, IcebergWriterBuilder,
         base_writer::data_file_writer::DataFileWriterBuilder,
         file_writer::{
-            location_generator::{DefaultFileNameGenerator, DefaultLocationGenerator},
             ParquetWriterBuilder,
+            location_generator::{DefaultFileNameGenerator, DefaultLocationGenerator},
         },
         function_writer::fanout_partition_writer::FanoutPartitionWriterBuilder,
-        IcebergWriter, IcebergWriterBuilder,
     },
 };
 use sqlx::types::Uuid;
@@ -70,7 +70,7 @@ impl CompactionExecutor for DataFusionExecutor {
             .execute(datafusion_task_ctx)
             .await?;
         let arc_input_schema = Arc::new(input_schema);
-        let mut futures = Vec::with_capacity(config.batch_parallelism);
+        let mut futures = Vec::with_capacity(config.executor_parallelism);
         // build iceberg writer for each partition
         for mut batch in batches {
             let dir_path = dir_path.clone();

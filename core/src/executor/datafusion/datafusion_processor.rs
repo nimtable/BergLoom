@@ -17,15 +17,14 @@
 use std::sync::Arc;
 
 use crate::{
+    CompactionConfig,
     error::{CompactionError, Result},
     executor::InputFileScanTasks,
-    CompactionConfig,
 };
 use datafusion::{
     execution::SendableRecordBatchStream,
     physical_plan::{
-        execute_stream_partitioned, repartition::RepartitionExec, ExecutionPlan,
-        ExecutionPlanProperties, Partitioning,
+        ExecutionPlan, ExecutionPlanProperties, Partitioning, repartition::RepartitionExec,
     },
     prelude::{SessionConfig, SessionContext},
 };
@@ -54,13 +53,13 @@ pub struct DatafusionProcessor {
 impl DatafusionProcessor {
     pub fn new(config: Arc<CompactionConfig>, file_io: FileIO) -> Self {
         let session_config = SessionConfig::new()
-            .with_target_partitions(config.target_partitions)
+            .with_target_partitions(config.executor_parallelism)
             .with_batch_size(config.max_record_batch_rows);
         let ctx = Arc::new(SessionContext::new_with_config(session_config));
         let table_register = DatafusionTableRegister::new(
             file_io,
             ctx.clone(),
-            config.batch_parallelism,
+            config.executor_parallelism,
             config.max_record_batch_rows,
         );
         Self {
@@ -144,18 +143,21 @@ impl DatafusionProcessor {
         // Conditionally create a new physical_plan if repartitioning is needed
         let plan_to_execute: Arc<dyn ExecutionPlan + 'static> =
             if physical_plan.output_partitioning().partition_count()
-                != self.config.target_partitions
+                != self.config.output_parallelism
             {
                 Arc::new(RepartitionExec::try_new(
                     physical_plan,
-                    Partitioning::RoundRobinBatch(self.config.target_partitions),
+                    Partitioning::RoundRobinBatch(self.config.output_parallelism),
                 )?)
             } else {
                 physical_plan
             };
 
-        let batches = execute_stream_partitioned(plan_to_execute, self.ctx.task_ctx())?;
-
+        // we must execute the plan with output parallelism, target_partitions is not used for repartitioning
+        let mut batches = Vec::with_capacity(self.config.output_parallelism);
+        for i in 0..self.config.output_parallelism {
+            batches.push(plan_to_execute.execute(i, self.ctx.task_ctx())?);
+        }
         Ok((batches, input_schema))
     }
 }
@@ -164,7 +166,7 @@ pub struct DatafusionTableRegister {
     file_io: FileIO,
     ctx: Arc<SessionContext>,
 
-    batch_parallelism: usize,
+    executor_parallelism: usize,
     max_record_batch_rows: usize,
 }
 
@@ -172,13 +174,13 @@ impl DatafusionTableRegister {
     pub fn new(
         file_io: FileIO,
         ctx: Arc<SessionContext>,
-        batch_parallelism: usize,
+        executor_parallelism: usize,
         max_record_batch_rows: usize,
     ) -> Self {
         DatafusionTableRegister {
             file_io,
             ctx,
-            batch_parallelism,
+            executor_parallelism,
             max_record_batch_rows,
         }
     }
@@ -224,7 +226,7 @@ impl DatafusionTableRegister {
             self.file_io.clone(),
             need_seq_num,
             need_file_path_and_pos,
-            self.batch_parallelism,
+            self.executor_parallelism,
             self.max_record_batch_rows,
         );
 
