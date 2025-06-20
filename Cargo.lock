@@ -2154,6 +2154,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "iceberg-catalog-rest"
+version = "0.4.0"
+source = "git+https://github.com/risingwavelabs/iceberg-rust.git?rev=15a4686b911d8a0847347342eda4e77f9057d29b#15a4686b911d8a0847347342eda4e77f9057d29b"
+dependencies = [
+ "async-trait",
+ "chrono",
+ "http",
+ "iceberg",
+ "itertools 0.13.0",
+ "log",
+ "reqwest",
+ "serde",
+ "serde_derive",
+ "serde_json",
+ "tokio",
+ "typed-builder 0.20.1",
+ "uuid",
+]
+
+[[package]]
 name = "iceberg-compact-core"
 version = "0.1.0"
 dependencies = [
@@ -2189,7 +2209,6 @@ dependencies = [
  "iceberg",
  "iceberg-catalog-memory",
  "iceberg-compact-core",
- "parquet",
  "tempfile",
  "tokio",
 ]
@@ -3618,6 +3637,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "rest-catalog-example"
+version = "0.1.0"
+dependencies = [
+ "iceberg",
+ "iceberg-catalog-rest",
+ "iceberg-compact-core",
+ "tokio",
+]
+
+[[package]]
 name = "ring"
 version = "0.17.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4647,9 +4676,9 @@ checksum = "1f3ccbac311fea05f86f61904b462b55fb3df8837a366dfc601a0161d0532f20"
 
 [[package]]
 name = "tokio"
-version = "1.45.0"
+version = "1.45.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2513ca694ef9ede0fb23fe71a4ee4107cb102b9dc1930f6d0fd77aae068ae165"
+checksum = "75ef51a33ef1da925cea3e4eb122833cb377c61439ca401b770f54902b806779"
 dependencies = [
  "backtrace",
  "bytes",

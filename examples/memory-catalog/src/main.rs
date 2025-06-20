@@ -21,7 +21,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let catalog = Arc::new(MemoryCatalog::new(file_io, Some(warehouse_location)));
 
     // 3. Create namespace and table
-    let namespace_ident = NamespaceIdent::new("warehouse".into());
+    let namespace_ident = NamespaceIdent::new("my_namespace".into());
     catalog
         .create_namespace(&namespace_ident, HashMap::new())
         .await?;
